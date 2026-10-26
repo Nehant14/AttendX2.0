@@ -1,0 +1,21 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.12
+pydantic==2.9.2
+pydantic-settings==2.5.2
+sqlalchemy==2.0.35
+alembic==1.13.3
+insightface==0.7.3
+onnxruntime==1.19.2
+numpy<2
+scipy==1.14.1
+opencv-python-headless==4.10.0.84
+pillow==10.4.0
+pyjwt==2.9.0
+argon2-cffi==23.1.0
+python-dotenv==1.0.1
+httpx==0.27.2
+pytest==8.3.3
+ruff==0.6.9
+# optional (dev): enables tests/test_finetuned_integration.py
+# onnx

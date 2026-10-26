@@ -1,0 +1,13 @@
+.git
+.env
+data
+**/data
+**/__pycache__
+**/.pytest_cache
+.venv
+**/.venv
+frontend/node_modules
+frontend/dist
+models/*.pt
+models/*.onnx
+ml/finetune/datasets
