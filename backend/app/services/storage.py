@@ -60,11 +60,18 @@ def relative_to_data(path: Path | str) -> str:
     Already-relative paths are returned unchanged, so this is idempotent.
     """
     p = Path(path)
-    if not p.is_absolute():
+    parts = p.parts
+    if parts and parts[0] in ("enrollment", "sessions"):
         return p.as_posix()
+    if parts and parts[0] == "data" and len(parts) > 1 and parts[1] in ("enrollment", "sessions"):
+        return Path(*parts[1:]).as_posix()
     try:
         return p.resolve().relative_to(settings.DATA_DIR.resolve()).as_posix()
     except ValueError:
+        if parts and "data" in parts:
+            idx = parts.index("data")
+            if idx + 1 < len(parts) and parts[idx + 1] in ("enrollment", "sessions"):
+                return Path(*parts[idx + 1:]).as_posix()
         return p.as_posix()
 
 
@@ -85,6 +92,10 @@ def is_within(child: Path, parent: Path) -> bool:
 
 def data_url(rel_path: str) -> str:
     """Convert a relative data path to a /files/ URL."""
+    p = Path(rel_path)
+    parts = p.parts
+    if parts and parts[0] == "data" and len(parts) > 1 and parts[1] in ("enrollment", "sessions"):
+        rel_path = Path(*parts[1:]).as_posix()
     return f"/files/{rel_path}"
 
 

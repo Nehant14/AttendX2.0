@@ -207,7 +207,7 @@ async def upload_photos(
             det_score=res.det_score,
             face_px=res.face_px,
             blur_var=res.blur_var,
-            model_version=getattr(det, "embedder_version", "arcface-buffalo_l"),
+            model_version=getattr(det, "embedder_version", "arcface-r100"),
         )
         db.add(db_emb)
         db.flush()

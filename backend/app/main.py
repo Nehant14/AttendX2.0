@@ -142,6 +142,9 @@ app.include_router(attendance.router)
 @app.get("/files/{file_path:path}")
 def serve_file(file_path: str, _auth=Depends(get_current_user)):
     parts = Path(file_path).parts
+    if parts and parts[0] == "data" and len(parts) > 1 and parts[1] in ("enrollment", "sessions"):
+        parts = parts[1:]
+        file_path = Path(*parts).as_posix()
     # Only the image folders are public-by-login. Reject '..' / absolute paths outright and
     # make sure the resolved file stays inside that specific folder (so the SQLite file and
     # anything else in DATA_DIR can never be reached).

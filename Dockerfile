@@ -32,12 +32,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python requirements
-# --mount=type=cache keeps pip's wheel/download cache on the host permanently.
-# Even if requirements.txt changes, already-downloaded packages are NOT re-downloaded.
-# This turns the 8–15 min pip install into ~1–2 min on subsequent builds.
+# --mount=type=cache keeps pip's wheel/download cache across builds.
+# --default-timeout and --retries prevent ReadTimeoutError on slow/fluctuating networks.
 COPY backend/requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt
+    pip install --default-timeout=1000 --retries=10 -r requirements.txt
 
 # Copy backend code
 COPY backend/ ./
