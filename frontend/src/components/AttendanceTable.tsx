@@ -49,7 +49,12 @@ export const AttendanceTable: React.FC<Props> = ({ records, onStatusChange, isUp
                       <span>
                         {(r.similarity * 100).toFixed(1)}%
                         {r.margin !== null && (
-                          <span className="text-gray-400 ml-1">(+{(r.margin * 100).toFixed(1)}%)</span>
+                          <span
+                            className={`ml-1 ${r.margin < 0 ? 'text-red-400' : 'text-gray-400'}`}
+                            title="Lead over the next-best student for the same face"
+                          >
+                            ({r.margin >= 0 ? '+' : '-'}{Math.abs(r.margin * 100).toFixed(1)}%)
+                          </span>
                         )}
                       </span>
                     ) : (

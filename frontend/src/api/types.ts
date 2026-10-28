@@ -85,6 +85,12 @@ export interface Counts {
   unrecognizable_faces: number;
 }
 
+export interface Thresholds {
+  sim_accept: number;
+  sim_review_min: number;
+  margin_min: number;
+}
+
 export interface SessionData {
   id: number;
   course: Course;
@@ -100,6 +106,7 @@ export interface SessionData {
   records: AttendanceRecord[];
   unmatched_faces: UnmatchedFace[];
   processing_ms: number | null;
+  thresholds?: Thresholds | null;
 }
 
 export interface SessionSummary {

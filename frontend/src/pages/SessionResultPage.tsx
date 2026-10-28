@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Download, RefreshCw, Trash2, AlertTriangle, Users, CheckCircle, HelpCircle, XCircle } from 'lucide-react';
 import { apiFetch, downloadFile } from '../api/client';
-import { SessionData } from '../api/types';
+import { SessionData, Thresholds } from '../api/types';
 import { AnnotatedImageViewer } from '../components/AnnotatedImageViewer';
 import { AttendanceTable } from '../components/AttendanceTable';
+import { ThresholdPanel } from '../components/ThresholdPanel';
 
 export const SessionResultPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -52,6 +53,21 @@ export const SessionResultPage: React.FC = () => {
     } catch (err: any) {
       alert('Failed to update attendance status: ' + err.message);
       setSession(previousSession);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleApplyThresholds = async (values: Thresholds) => {
+    setIsUpdating(true);
+    try {
+      const updated = await apiFetch<SessionData>(`/api/sessions/${id}/rescore`, {
+        method: 'POST',
+        body: JSON.stringify(values),
+      });
+      setSession(updated);
+    } catch (err: any) {
+      alert('Failed to apply thresholds: ' + err.message);
     } finally {
       setIsUpdating(false);
     }
@@ -188,6 +204,15 @@ export const SessionResultPage: React.FC = () => {
           <div className="text-2xl font-bold text-gray-900 mt-1">{session.counts.unrecognizable_faces}</div>
         </div>
       </div>
+
+      {session.thresholds && id && (
+        <ThresholdPanel
+          sessionId={id}
+          defaults={session.thresholds}
+          busy={isUpdating}
+          onApply={handleApplyThresholds}
+        />
+      )}
 
       {/* Main split: Image Viewer and Attendance Table */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

@@ -24,18 +24,47 @@ from app.models import (
 )
 from app.schemas import (
     AttendanceRecordOut, CountsOut, CourseOut, RecordPatch,
-    SessionOut, SessionSummaryOut, UnmatchedFaceOut,
+    SessionOut, SessionSummaryOut, ThresholdsIn, ThresholdsOut, UnmatchedFaceOut,
 )
 from app.security import get_current_user
 from app.services import enrollment as enroll_svc
 from app.services.export import generate_csv
 from app.services.locks import inference_lock
+from app.services.matcher import decide_status
 from app.services.pipeline import decode_image, run_pipeline
 from app.services.storage import (
-    data_url, delete_directory, relative_to_data, session_dir,
+    absolute_from_data, data_url, delete_directory, relative_to_data, session_dir,
 )
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+def _image_url(sess: AttendanceSession, name: str, stored: Optional[str]) -> Optional[str]:
+    """URL for a session image. The canonical location is data/sessions/<id>/<name>; the stored
+    DB path is only a fallback (old rows may hold absolute or Windows-style paths)."""
+    canonical = f"sessions/{sess.id}/{name}"
+    if absolute_from_data(canonical).is_file():
+        return data_url(canonical)
+    if stored:
+        rel = relative_to_data(stored)
+        if absolute_from_data(rel).is_file():
+            return data_url(rel)
+    return None
+
+
+def _session_status_after_edit(sess: AttendanceSession, db: Session) -> None:
+    """Recompute done / needs_review after records changed."""
+    remaining_review = db.scalar(
+        select(AttendanceRecord).where(
+            AttendanceRecord.session_id == sess.id,
+            AttendanceRecord.status == "needs_review",
+        )
+    )
+    high_unknown = (
+        sess.faces_unknown > 3
+        or (sess.faces_detected > 0 and (sess.faces_unknown / max(sess.faces_detected, 1) > 0.20))
+    )
+    sess.status = "needs_review" if (remaining_review or high_unknown) else "done"
 
 
 def _build_session_out(sess: AttendanceSession, db: Session) -> SessionOut:
@@ -98,9 +127,6 @@ def _build_session_out(sess: AttendanceSession, db: Session) -> SessionOut:
         elif needs_review_count > 0:
             banner = "Some students require manual review."
 
-    orig_rel = relative_to_data(sess.source_image_path) if sess.source_image_path else ""
-    ann_rel = relative_to_data(sess.annotated_image_path) if sess.annotated_image_path else ""
-
     return SessionOut(
         id=sess.id,
         course=course_out,
@@ -119,11 +145,16 @@ def _build_session_out(sess: AttendanceSession, db: Session) -> SessionOut:
             unrecognizable_faces=sess.faces_unrecognizable,
         ),
         banner=banner,
-        original_url=data_url(orig_rel) if orig_rel else None,
-        annotated_url=data_url(ann_rel) if ann_rel else None,
+        original_url=_image_url(sess, "original.jpg", sess.source_image_path),
+        annotated_url=_image_url(sess, "annotated.jpg", sess.annotated_image_path),
         records=records_out,
         unmatched_faces=unmatched_out,
         processing_ms=sess.processing_ms,
+        thresholds=ThresholdsOut(
+            sim_accept=settings.SIM_ACCEPT,
+            sim_review_min=settings.SIM_REVIEW_MIN,
+            margin_min=settings.MARGIN_MIN,
+        ),
     )
 
 
@@ -358,24 +389,53 @@ def update_record_status(
     rec.marked_by = "teacher"
     db.flush()
 
-    # Recompute session status
-    remaining_review = db.scalar(
-        select(AttendanceRecord).where(
-            AttendanceRecord.session_id == session_id,
-            AttendanceRecord.status == "needs_review",
-        )
-    )
+    _session_status_after_edit(sess, db)
 
-    high_unknown = (
-        sess.faces_unknown > 3
-        or (sess.faces_detected > 0 and (sess.faces_unknown / max(sess.faces_detected, 1) > 0.20))
-    )
+    db.flush()
+    db.refresh(sess)
+    return _build_session_out(sess, db)
 
-    if not remaining_review and not high_unknown:
-        sess.status = "done"
-    else:
-        sess.status = "needs_review"
 
+@router.post("/{session_id}/rescore", response_model=SessionOut)
+def rescore_session(
+    session_id: int,
+    body: ThresholdsIn,
+    db: Session = Depends(get_db),
+    _auth=Depends(get_current_user),
+):
+    """Re-decide present / needs_review / absent from the stored match scores using the given
+    thresholds. The result is saved. Records the teacher set by hand are never touched, and a
+    face is never given to two students (the stronger match keeps it)."""
+    if body.sim_review_min > body.sim_accept:
+        raise AppError(422, "Review threshold cannot be higher than the present threshold.",
+                       "VALIDATION_ERROR")
+    sess = db.get(AttendanceSession, session_id)
+    if sess is None:
+        raise not_found("Session")
+
+    candidates = [
+        r for r in sess.records
+        if r.marked_by == "auto" and r.similarity is not None and r.margin is not None
+    ]
+    candidates.sort(key=lambda r: r.similarity, reverse=True)
+
+    # Faces already held by a teacher-marked present/review student can't be claimed again.
+    claimed: set[str] = {
+        r.bbox_json for r in sess.records
+        if r.marked_by == "teacher" and r.status != "absent" and r.bbox_json
+    }
+    for r in candidates:
+        new_status = decide_status(r.similarity, r.margin, body.sim_accept,
+                                   body.sim_review_min, body.margin_min)
+        if new_status != "absent" and r.bbox_json:
+            if r.bbox_json in claimed:
+                new_status = "absent"
+            else:
+                claimed.add(r.bbox_json)
+        r.status = new_status
+
+    db.flush()
+    _session_status_after_edit(sess, db)
     db.flush()
     db.refresh(sess)
     return _build_session_out(sess, db)

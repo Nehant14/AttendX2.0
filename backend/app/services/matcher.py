@@ -125,3 +125,54 @@ def match_faces(
                                      student_index=None, similarity=None, margin=None)
 
     return results  # type: ignore[return-value]
+
+
+def student_best_scores(
+    face_embeddings: np.ndarray,         # (N, 512) L2-normalised, recognizable faces only
+    roster_embeddings: np.ndarray,       # (M, 512) L2-normalised
+    student_of_embedding: np.ndarray,    # (M,) column index (0..K-1) for each embedding
+    K: int,
+) -> list[Optional[tuple[int, float, float]]]:
+    """
+    For every student column, the face that looks most like them, independent of the
+    one-to-one assignment and of any threshold.
+
+    Returns a list of length K. Each entry is (face_row, similarity, margin) or None when
+    there are no faces / no embeddings. ``margin`` is the student's similarity minus the best
+    OTHER student's similarity on that same face, so it is negative when someone else
+    resembles that face more. This is what lets absent students still show their numbers.
+    """
+    if len(face_embeddings) == 0 or len(roster_embeddings) == 0 or K == 0:
+        return [None] * K
+
+    S_all = cosine_matrix(face_embeddings, roster_embeddings)          # (N, M)
+    S = np.full((len(face_embeddings), K), -2.0, dtype=np.float32)
+    for m, col in enumerate(student_of_embedding):
+        c = int(col)
+        if 0 <= c < K:
+            S[:, c] = np.maximum(S[:, c], S_all[:, m])
+
+    out: list[Optional[tuple[int, float, float]]] = []
+    for c in range(K):
+        col = S[:, c]
+        if col.max() <= -2.0:            # student has no embeddings in this roster slice
+            out.append(None)
+            continue
+        r = int(np.argmax(col))
+        sim = float(col[r])
+        if K > 1:
+            margin = sim - float(np.max(np.delete(S[r], c)))
+        else:
+            margin = sim
+        out.append((r, sim, margin))
+    return out
+
+
+def decide_status(sim: float, margin: float, sim_accept: float,
+                  sim_review_min: float, margin_min: float) -> str:
+    """Same rule as match_faces, expressed as a student status."""
+    if sim >= sim_accept and margin >= margin_min:
+        return "present"
+    if sim >= sim_review_min:
+        return "needs_review"
+    return "absent"

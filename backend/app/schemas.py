@@ -2,7 +2,7 @@
 from __future__ import annotations
 import datetime
 from typing import Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
@@ -147,6 +147,19 @@ class AttendanceRecordOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ThresholdsOut(BaseModel):
+    sim_accept: float
+    sim_review_min: float
+    margin_min: float
+
+
+class ThresholdsIn(BaseModel):
+    """Per-request thresholds used to re-decide present / review / absent."""
+    sim_accept: float = Field(ge=-1.0, le=1.0)
+    sim_review_min: float = Field(ge=-1.0, le=1.0)
+    margin_min: float = Field(ge=-1.0, le=1.0)
+
+
 class UnmatchedFaceOut(BaseModel):
     bbox: list[float]
     label: str
@@ -178,6 +191,7 @@ class SessionOut(BaseModel):
     records: list[AttendanceRecordOut]
     unmatched_faces: list[UnmatchedFaceOut]
     processing_ms: Optional[int]
+    thresholds: Optional[ThresholdsOut] = None
     model_config = {"from_attributes": True}
 
 

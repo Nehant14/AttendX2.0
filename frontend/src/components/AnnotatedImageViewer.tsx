@@ -21,7 +21,7 @@ export const AnnotatedImageViewer: React.FC<Props> = ({ annotatedUrl, originalUr
   const dragStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
 
   const activeUrl = showOriginal ? originalUrl : annotatedUrl || originalUrl;
-  const { src, loading, error } = useAuthedImage(activeUrl);
+  const { src, loading, error, errorMessage } = useAuthedImage(activeUrl);
 
   const clamp = (v: number) => Math.min(MAX_SCALE, Math.max(MIN_SCALE, v));
   const zoomBy = (delta: number) => setScale((s) => clamp(+(s + delta).toFixed(2)));
@@ -136,7 +136,10 @@ export const AnnotatedImageViewer: React.FC<Props> = ({ annotatedUrl, originalUr
         }`}
       >
         {error ? (
-          <div className="text-gray-400 text-sm">Image could not be loaded.</div>
+          <div className="text-center px-4">
+            <div className="text-gray-300 text-sm">Image could not be loaded.</div>
+            {errorMessage && <div className="text-gray-500 text-xs mt-1 break-all">{errorMessage}</div>}
+          </div>
         ) : loading || !src ? (
           <div className="text-gray-400 text-sm animate-pulse">{activeUrl ? 'Loading image…' : 'No image available'}</div>
         ) : (

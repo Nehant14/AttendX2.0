@@ -17,7 +17,7 @@ from PIL import Image, ImageOps
 
 from app.config import settings
 from app.services.annotate import annotate_image, build_detection_dicts
-from app.services.matcher import match_faces
+from app.services.matcher import match_faces, student_best_scores
 from app.services.storage import save_named_image
 
 logger = logging.getLogger(__name__)
@@ -165,6 +165,15 @@ def run_pipeline(
                 df.similarity = mr.similarity
                 df.margin = mr.margin
 
+    # Best-looking face for every student, even those who end up absent, so the teacher can
+    # still see how close the match was (and re-decide with other thresholds later).
+    best_scores: list = [None] * K
+    if N_valid > 0 and K > 0 and len(roster_embeddings) > 0:
+        best_scores = student_best_scores(
+            face_embeddings=face_embs, roster_embeddings=roster_embeddings,
+            student_of_embedding=emb_cols, K=K,
+        )
+
     # 5. Build student results
     recognized_col: dict[int, int] = {}   # col -> index in recognizable
     review_col: dict[int, int] = {}
@@ -200,8 +209,15 @@ def run_pipeline(
                                     "similarity": df.similarity, "margin": df.margin,
                                     "bbox": df.bbox})
         else:
-            student_results.append({**base, "status": "absent",
-                                    "similarity": None, "margin": None, "bbox": None})
+            best = best_scores[col] if col is not None else None
+            if best is not None:
+                face_row, b_sim, b_margin = best
+                student_results.append({**base, "status": "absent",
+                                        "similarity": b_sim, "margin": b_margin,
+                                        "bbox": recognizable[face_row].bbox})
+            else:
+                student_results.append({**base, "status": "absent",
+                                        "similarity": None, "margin": None, "bbox": None})
 
     # 6. Sanity / banner
     n_unrecog = sum(1 for df in detected if df.label == "unrecognizable")

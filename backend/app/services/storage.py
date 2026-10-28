@@ -59,6 +59,9 @@ def relative_to_data(path: Path | str) -> str:
 
     Already-relative paths are returned unchanged, so this is idempotent.
     """
+    # Rows written on Windows may hold backslashes; read them correctly on any OS.
+    if isinstance(path, str) and "\\" in path:
+        path = path.replace("\\", "/")
     p = Path(path)
     parts = p.parts
     if parts and parts[0] in ("enrollment", "sessions"):
@@ -77,6 +80,8 @@ def relative_to_data(path: Path | str) -> str:
 
 def absolute_from_data(path: Path | str) -> Path:
     """Resolve a stored (relative or legacy absolute) path to an absolute filesystem path."""
+    if isinstance(path, str) and "\\" in path:
+        path = path.replace("\\", "/")
     p = Path(path)
     return p if p.is_absolute() else (settings.DATA_DIR / p)
 
@@ -92,6 +97,7 @@ def is_within(child: Path, parent: Path) -> bool:
 
 def data_url(rel_path: str) -> str:
     """Convert a relative data path to a /files/ URL."""
+    rel_path = rel_path.replace("\\", "/")
     p = Path(rel_path)
     parts = p.parts
     if parts and parts[0] == "data" and len(parts) > 1 and parts[1] in ("enrollment", "sessions"):
