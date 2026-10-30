@@ -33,9 +33,18 @@ Or build once (`npm run build` in `frontend/`) and open http://localhost:8000 - 
 
 ## Pages
 
-- **Admin** - Take Attendance (upload class photo), Students (add student, upload face photos), result page
-  (class photo with boxes around every detected face, present/absent list with match %, manual Mark Present/Absent).
+- **Admin** - Take Attendance (upload one or more class photos of the same class; a student is present if any photo
+  matches them), Students (add student, upload face photos), result page (class photos with boxes around every
+  detected face, present/absent list with match %, manual Mark Present/Absent, **Retake attendance** to redo the
+  class from new photos).
 - **Student** - own attendance: classes, present, absent, percentage, date-wise list.
+
+## Far-away faces
+
+For every enrollment photo the app also stores embeddings of copies shrunk to a 64 / 40 / 24 px face and scaled back
+up, so small, blurry faces at the back of the class match better. A copy is kept only if it still looks like its own
+sharp photo (`MIN_SELF_SIM` in `services/enrollment.py`). Photos enrolled before this change have no such copies:
+upload them again (or delete `backend/data/` and start fresh).
 
 ## Fine-tuned detector
 

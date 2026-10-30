@@ -64,7 +64,7 @@ class SessionOut(BaseModel):
     present: int
     absent: int
     avg_match: Optional[float] = None  # mean similarity of the auto-matched present students
-    image_url: Optional[str] = None
+    image_urls: list[str]  # annotated class photos
     records: list[RecordOut]
 
 

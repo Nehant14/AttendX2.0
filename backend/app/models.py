@@ -26,7 +26,7 @@ class Student(Base):
 
 
 class StudentEmbedding(Base):
-    """One row per enrolled photo: the 512-d ArcFace vector (float32 bytes) + the saved photo."""
+    """One row per enrolled photo: (k, 512) float32 bytes - row 0 is the photo, the rest are low-res copies."""
     __tablename__ = "student_embeddings"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -38,12 +38,12 @@ class StudentEmbedding(Base):
 
 
 class AttendanceSession(Base):
-    """One uploaded class photo."""
+    """One class (one or more class photos)."""
     __tablename__ = "attendance_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime, default=_now, nullable=False)
-    image_path = Column(Text, nullable=True)  # annotated photo, relative to DATA_DIR
+    images = Column(Text, nullable=False, default="[]")  # JSON list of annotated photos, relative to DATA_DIR
 
     records = relationship("AttendanceRecord", back_populates="session", cascade="all, delete-orphan")
 

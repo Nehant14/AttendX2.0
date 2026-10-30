@@ -15,7 +15,7 @@ from app.schemas import (
     PhotoOut, PhotoUploadResponse, PhotoUploadResult,
     StudentCreate, StudentDetailOut, StudentOut,
 )
-from app.services.enrollment import embed_largest_face
+from app.services.enrollment import embed_photo
 from app.services.imaging import decode_image, save_jpeg
 from app.services.locks import inference_lock
 
@@ -71,14 +71,14 @@ def upload_photos(student_id: int, files: list[UploadFile], request: Request, db
             continue
 
         with inference_lock:
-            emb = embed_largest_face(insight_app, img)
-        if emb is None:
+            embs = embed_photo(insight_app, img)
+        if embs is None:
             results.append(PhotoUploadResult(filename=name, accepted=False, reason="No face detected."))
             continue
 
         rel = f"enrollment/{s.id}/{uuid.uuid4().hex}.jpg"
         save_jpeg(settings.DATA_DIR / rel, img)
-        db.add(StudentEmbedding(student_id=s.id, embedding=emb.astype(np.float32).tobytes(), image_path=rel))
+        db.add(StudentEmbedding(student_id=s.id, embedding=embs.astype(np.float32).tobytes(), image_path=rel))
         results.append(PhotoUploadResult(filename=name, accepted=True))
 
     return PhotoUploadResponse(results=results)

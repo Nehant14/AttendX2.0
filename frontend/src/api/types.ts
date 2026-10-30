@@ -41,7 +41,7 @@ export interface Session {
   present: number;
   absent: number;
   avg_match: number | null;
-  image_url: string | null;
+  image_urls: string[];
   records: AttendanceRecord[];
 }
 
