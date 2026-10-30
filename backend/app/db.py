@@ -1,6 +1,7 @@
-"""SQLAlchemy engine, session factory, Base, and init_db()."""
-from sqlalchemy import create_engine, event, text
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+"""SQLAlchemy engine, session factory and table creation."""
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 from app.config import settings
 
 
@@ -8,34 +9,26 @@ class Base(DeclarativeBase):
     pass
 
 
-# Ensure data directory exists before creating engine
 settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-engine = create_engine(
-    settings.DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
-
+engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 @event.listens_for(engine, "connect")
-def set_sqlite_pragmas(dbapi_conn, connection_record):
-    """Enable WAL mode and foreign key enforcement on every connection."""
-    cursor = dbapi_conn.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+def _enable_foreign_keys(dbapi_conn, _record):
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA foreign_keys=ON")
+    cur.close()
 
 
 def init_db() -> None:
-    """Create all tables if they do not exist."""
-    from app import models  # noqa: F401 — import to register ORM classes
+    from app import models  # noqa: F401  (registers the tables)
     Base.metadata.create_all(bind=engine)
 
 
 def get_db():
-    """FastAPI dependency: yields a DB session, commits on success, rolls back on error."""
+    """FastAPI dependency: one session per request, committed on success."""
     db = SessionLocal()
     try:
         yield db

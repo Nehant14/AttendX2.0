@@ -1,81 +1,38 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { getAuth } from './api/client';
+import { Role } from './api/types';
 import { Layout } from './components/Layout';
-import { ProtectedRoute } from './components/ProtectedRoute';
 import { LoginPage } from './pages/LoginPage';
 import { TakeAttendancePage } from './pages/TakeAttendancePage';
 import { StudentsPage } from './pages/StudentsPage';
 import { StudentDetailPage } from './pages/StudentDetailPage';
-import { CoursesPage } from './pages/CoursesPage';
 import { SessionResultPage } from './pages/SessionResultPage';
-import { HistoryPage } from './pages/HistoryPage';
+import { StudentDashboardPage } from './pages/StudentDashboardPage';
 
-const queryClient = new QueryClient();
-
-export const App: React.FC = () => {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-
-          <Route element={<ProtectedRoute />}>
-            <Route
-              path="/"
-              element={
-                <Layout>
-                  <TakeAttendancePage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/students"
-              element={
-                <Layout>
-                  <StudentsPage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/students/:id"
-              element={
-                <Layout>
-                  <StudentDetailPage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/courses"
-              element={
-                <Layout>
-                  <CoursesPage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/sessions/:id"
-              element={
-                <Layout>
-                  <SessionResultPage />
-                </Layout>
-              }
-            />
-            <Route
-              path="/history"
-              element={
-                <Layout>
-                  <HistoryPage />
-                </Layout>
-              }
-            />
-          </Route>
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
-  );
+/** Only lets the given role in; anyone else goes back to the login page. */
+const Guard = ({ role, children }: { role: Role; children: JSX.Element }) => {
+  const auth = getAuth();
+  if (!auth || auth.role !== role) return <Navigate to="/login" replace />;
+  return <Layout>{children}</Layout>;
 };
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* Professor / admin */}
+        <Route path="/admin" element={<Guard role="admin"><TakeAttendancePage /></Guard>} />
+        <Route path="/admin/students" element={<Guard role="admin"><StudentsPage /></Guard>} />
+        <Route path="/admin/students/:id" element={<Guard role="admin"><StudentDetailPage /></Guard>} />
+        <Route path="/admin/sessions/:id" element={<Guard role="admin"><SessionResultPage /></Guard>} />
+
+        {/* Student */}
+        <Route path="/student" element={<Guard role="student"><StudentDashboardPage /></Guard>} />
+
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

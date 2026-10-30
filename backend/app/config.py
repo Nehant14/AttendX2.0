@@ -1,4 +1,4 @@
-"""Application configuration loaded from environment / .env file."""
+"""Application settings (read from environment / .env; every value has a default)."""
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -8,56 +8,25 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    # App
-    APP_ENV: str = "dev"
-    SECRET_KEY: str = "dev-secret-change-me"
-    AUTH_ENABLED: bool = True
+    # Single login (JWT)
+    SECRET_KEY: str = "dev-secret-change-me-0123456789abcdef"
     ADMIN_EMAIL: str = "admin@example.com"
     ADMIN_PASSWORD: str = "nehant123"
     TOKEN_EXPIRE_MINUTES: int = 720
 
-    # Database / Storage
+    # Storage
     DATABASE_URL: str = "sqlite:///./data/attendance.sqlite3"
     DATA_DIR: Path = Path("./data")
-    MAX_UPLOAD_MB: int = 25
 
-    # Detector
+    # Detector: "pretrained" (InsightFace SCRFD) or "finetuned" (your YOLOv8-face ONNX)
     DETECTOR: str = "pretrained"
     FINETUNED_MODEL_PATH: Path = Path("models/face_ft_best.onnx")
     INSIGHTFACE_MODEL: str = "scrfd_34gf_r100"
     INSIGHTFACE_HOME: str = "~/.insightface"
-
-    # Detection
-    DET_SIZE: int = 640          # SCRFD-34GF has a fixed 640×640 input in the ONNX graph
     DET_CONF_MIN: float = 0.40
-    MIN_FACE_PX: int = 40
 
-    # Matching
-    SIM_ACCEPT: float = 0.45
-    SIM_REVIEW_MIN: float = 0.35
-    MARGIN_MIN: float = 0.05
-
-    # Enrollment
-    ENROLL_MIN_PHOTOS: int = 3
-    ENROLL_MAX_PHOTOS: int = 15
-    ENROLL_MIN_FACE_PX: int = 80
-    ENROLL_MIN_DET_SCORE: float = 0.60
-    ENROLL_MIN_BLUR_VAR: float = 60.0
-    ENROLL_DUPLICATE_SIM: float = 0.60
-
-    # Optional
-    TILING: bool = False
-    # Testing / ops: skip loading ML models at startup (used by the test-suite)
-    SKIP_MODEL_LOAD: bool = False
-    CORS_ORIGINS: str = "http://localhost:5173"
-
-    @property
-    def is_prod(self) -> bool:
-        return self.APP_ENV.lower() == "prod"
-
-    @property
-    def cors_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+    # Matching: a face is a student if cosine similarity >= this
+    SIM_THRESHOLD: float = 0.45
 
     @property
     def insightface_home_resolved(self) -> str:

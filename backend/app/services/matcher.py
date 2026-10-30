@@ -1,127 +1,36 @@
-"""
-Matching service: cosine similarity matrix + per-student max pooling
-+ Hungarian one-to-one assignment + threshold decisions.
-"""
-from __future__ import annotations
-
-import logging
-from dataclasses import dataclass
+"""Match detected faces to students: cosine similarity + one-to-one (Hungarian) assignment."""
 from typing import Optional
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from app.config import settings
-from app.services.embedder import cosine_matrix
-
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class MatchResult:
-    """Matching outcome for a single face."""
-    face_index: int
-    label: str                       # recognized | review | unknown | unrecognizable
-    student_index: Optional[int]     # column index into student_indices list
-    similarity: Optional[float]
-    margin: Optional[float]
-
 
 def match_faces(
-    face_embeddings: np.ndarray,         # (N, 512) L2-normalised
-    face_valid_mask: np.ndarray,         # (N,) bool — False = unrecognizable
-    roster_embeddings: np.ndarray,       # (M, 512) L2-normalised
-    student_of_embedding: np.ndarray,    # (M,) int — column index for each embedding
-    student_indices: list[int],          # [K] unique student column indices
-    sim_accept: float | None = None,
-    sim_review_min: float | None = None,
-    margin_min: float | None = None,
-) -> list[MatchResult]:
+    face_embs: np.ndarray,      # (N, 512) L2-normalised faces found in the class photo
+    roster_embs: np.ndarray,    # (M, 512) L2-normalised enrolled photos
+    owner_cols: np.ndarray,     # (M,) which student (0..K-1) each enrolled photo belongs to
+    n_students: int,            # K
+    threshold: float,
+) -> list[tuple[Optional[int], Optional[float]]]:
+    """For every face return (student_column, similarity), or (None, None) if nobody matches.
+
+    1. Cosine similarity of every face with every enrolled photo.
+    2. A student's score for a face = the best of their photos.
+    3. Hungarian assignment, so one student can't be claimed by two faces.
+    4. Keep a pair only if the similarity is >= threshold.
     """
-    Match faces to students using cosine similarity and Hungarian assignment.
+    n = len(face_embs)
+    results: list[tuple[Optional[int], Optional[float]]] = [(None, None)] * n
+    if n == 0 or len(roster_embs) == 0 or n_students == 0:
+        return results
 
-    For each of the N faces returns a MatchResult.
-    Faces with face_valid_mask=False are returned immediately as "unrecognizable".
+    sim_all = face_embs @ roster_embs.T                      # (N, M)
+    sim = np.full((n, n_students), -1.0, dtype=np.float32)   # (N, K)
+    for col in np.unique(owner_cols):
+        sim[:, col] = sim_all[:, owner_cols == col].max(axis=1)
 
-    Algorithm (per spec §8.4):
-      1. S_all (N_valid, M) = face_embeddings @ roster_embeddings.T
-      2. S (N_valid, K) = per-student max over their embedding rows.
-      3. Hungarian on -S for one-to-one assignment.
-      4. Threshold: sim >= SIM_ACCEPT and margin >= MARGIN_MIN -> recognized
-                    sim >= SIM_REVIEW_MIN                       -> review
-                    else                                        -> unknown
-      5. Unassigned valid faces -> unknown.
-    """
-    sim_accept = sim_accept if sim_accept is not None else settings.SIM_ACCEPT
-    sim_review_min = sim_review_min if sim_review_min is not None else settings.SIM_REVIEW_MIN
-    margin_min = margin_min if margin_min is not None else settings.MARGIN_MIN
-
-    N = len(face_valid_mask)
-    results: list[Optional[MatchResult]] = [None] * N
-
-    # Mark unrecognizable faces immediately
-    for i in range(N):
-        if not face_valid_mask[i]:
-            results[i] = MatchResult(face_index=i, label="unrecognizable",
-                                     student_index=None, similarity=None, margin=None)
-
-    valid_idx = [i for i in range(N) if face_valid_mask[i]]
-    N_valid = len(valid_idx)
-
-    if N_valid == 0 or len(roster_embeddings) == 0 or len(student_indices) == 0:
-        for i in valid_idx:
-            results[i] = MatchResult(face_index=i, label="unknown",
-                                     student_index=None, similarity=None, margin=None)
-        return results  # type: ignore[return-value]
-
-    K = len(student_indices)
-    # Map student index value -> column in S
-    sid_to_col: dict[int, int] = {sid: col for col, sid in enumerate(student_indices)}
-
-    # Step 1: S_all (N_valid, M)
-    valid_embs = face_embeddings[valid_idx]
-    S_all = cosine_matrix(valid_embs, roster_embeddings)  # (N_valid, M)
-
-    # Step 2: S (N_valid, K) — per-student max
-    S = np.full((N_valid, K), -2.0, dtype=np.float32)
-    for m, sid in enumerate(student_of_embedding):
-        col = sid_to_col.get(int(sid))
-        if col is not None:
-            S[:, col] = np.maximum(S[:, col], S_all[:, m])
-
-    # Step 3: Hungarian assignment
-    row_ind, col_ind = linear_sum_assignment(-S)
-
-    for r, c in zip(row_ind, col_ind):
-        face_i = valid_idx[r]
-        sim = float(S[r, c])
-
-        # Margin: sim lead over best OTHER student
-        if K > 1:
-            others = np.delete(S[r], c)
-            mg = sim - float(np.max(others))
-        else:
-            mg = sim  # only one student
-
-        if sim >= sim_accept and mg >= margin_min:
-            label = "recognized"
-        elif sim >= sim_review_min:
-            label = "review"
-        else:
-            label = "unknown"
-
-        results[face_i] = MatchResult(
-            face_index=face_i,
-            label=label,
-            student_index=c if label != "unknown" else None,
-            similarity=sim if label != "unknown" else None,
-            margin=mg if label != "unknown" else None,
-        )
-
-    # Remaining valid faces not assigned -> unknown
-    for i in valid_idx:
-        if results[i] is None:
-            results[i] = MatchResult(face_index=i, label="unknown",
-                                     student_index=None, similarity=None, margin=None)
-
-    return results  # type: ignore[return-value]
+    rows, cols = linear_sum_assignment(-sim)
+    for r, c in zip(rows, cols):
+        if sim[r, c] >= threshold:
+            results[r] = (int(c), float(sim[r, c]))
+    return results
