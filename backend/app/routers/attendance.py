@@ -11,7 +11,7 @@ from app.config import settings
 from app.db import get_db
 from app.models import AttendanceRecord, AttendanceSession, Student, StudentEmbedding
 from app.routers.auth import admin_only
-from app.schemas import RecordOut, SessionOut, StatusPatch
+from app.schemas import AttendanceGrid, GridRow, GridSession, RecordOut, SessionOut, StatusPatch
 from app.services.imaging import decode_image
 from app.services.locks import inference_lock
 from app.services.pipeline import run_pipeline
@@ -109,6 +109,22 @@ def _mark(db: Session, request: Request, files: list[UploadFile], sess: Attendan
     db.flush()
     db.refresh(sess)
     return _session_out(sess)
+
+
+@router.get("", response_model=AttendanceGrid)
+def attendance_grid(db: Session = Depends(get_db)):
+    """Every student x every class day."""
+    sessions = db.scalars(select(AttendanceSession).order_by(AttendanceSession.created_at, AttendanceSession.id)).all()
+    status = {(r.student_id, r.session_id): r.status for r in db.scalars(select(AttendanceRecord)).all()}
+    rows = []
+    for s in db.scalars(select(Student).order_by(Student.roll_no)).all():
+        marks = [status.get((s.id, sess.id)) for sess in sessions]
+        total = sum(1 for m in marks if m is not None)
+        present = sum(1 for m in marks if m == "present")
+        rows.append(GridRow(student_id=s.id, roll_no=s.roll_no, full_name=s.full_name, marks=marks,
+                            present=present, total=total,
+                            percentage=round(present / total * 100, 1) if total else 0.0))
+    return AttendanceGrid(sessions=[GridSession(id=x.id, created_at=x.created_at) for x in sessions], students=rows)
 
 
 @router.post("", response_model=SessionOut, status_code=201)

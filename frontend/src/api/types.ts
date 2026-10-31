@@ -54,3 +54,16 @@ export interface MyAttendance {
   percentage: number;
   records: { session_id: number; date: string; status: 'present' | 'absent' }[];
 }
+
+export interface AttendanceGrid {
+  sessions: { id: number; created_at: string }[];
+  students: {
+    student_id: number;
+    roll_no: string;
+    full_name: string;
+    marks: (('present' | 'absent') | null)[];
+    present: number;
+    total: number;
+    percentage: number;
+  }[];
+}

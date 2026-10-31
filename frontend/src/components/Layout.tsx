@@ -1,9 +1,10 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Camera, Users, LogOut } from 'lucide-react';
+import { Camera, Users, Table, LogOut } from 'lucide-react';
 import { clearAuth, getAuth } from '../api/client';
 
 const adminLinks = [
   { to: '/admin', label: 'Take Attendance', icon: Camera, end: true },
+  { to: '/admin/attendance', label: 'Attendance', icon: Table, end: false },
   { to: '/admin/students', label: 'Students', icon: Users, end: false },
 ];
 

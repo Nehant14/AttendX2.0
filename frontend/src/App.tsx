@@ -7,6 +7,7 @@ import { TakeAttendancePage } from './pages/TakeAttendancePage';
 import { StudentsPage } from './pages/StudentsPage';
 import { StudentDetailPage } from './pages/StudentDetailPage';
 import { SessionResultPage } from './pages/SessionResultPage';
+import { AttendanceGridPage } from './pages/AttendanceGridPage';
 import { StudentDashboardPage } from './pages/StudentDashboardPage';
 
 /** Only lets the given role in; anyone else goes back to the login page. */
@@ -24,6 +25,7 @@ export default function App() {
 
         {/* Professor / admin */}
         <Route path="/admin" element={<Guard role="admin"><TakeAttendancePage /></Guard>} />
+        <Route path="/admin/attendance" element={<Guard role="admin"><AttendanceGridPage /></Guard>} />
         <Route path="/admin/students" element={<Guard role="admin"><StudentsPage /></Guard>} />
         <Route path="/admin/students/:id" element={<Guard role="admin"><StudentDetailPage /></Guard>} />
         <Route path="/admin/sessions/:id" element={<Guard role="admin"><SessionResultPage /></Guard>} />

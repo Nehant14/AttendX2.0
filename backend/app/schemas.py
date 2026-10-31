@@ -86,3 +86,23 @@ class MyAttendanceOut(BaseModel):
     absent: int
     percentage: float
     records: list[MyRecordOut]
+
+
+class GridSession(BaseModel):
+    id: int
+    created_at: datetime.datetime
+
+
+class GridRow(BaseModel):
+    student_id: int
+    roll_no: str
+    full_name: str
+    marks: list[Optional[str]]  # one per session (same order as `sessions`); None = not on the roster then
+    present: int
+    total: int
+    percentage: float
+
+
+class AttendanceGrid(BaseModel):
+    sessions: list[GridSession]  # oldest first
+    students: list[GridRow]

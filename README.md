@@ -36,7 +36,7 @@ Or build once (`npm run build` in `frontend/`) and open http://localhost:8000 - 
 - **Admin** - Take Attendance (upload one or more class photos of the same class; a student is present if any photo
   matches them), Students (add student, upload face photos), result page (class photos with boxes around every
   detected face, present/absent list with match %, manual Mark Present/Absent, **Retake attendance** to redo the
-  class from new photos).
+  class from new photos), Attendance (one table: every student x every class day, with totals).
 - **Student** - own attendance: classes, present, absent, percentage, date-wise list.
 
 ## Far-away faces
